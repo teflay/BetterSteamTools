@@ -53,12 +53,11 @@ CheckResult Check()
 {
     CheckResult r;
     r.oldVersion = OPENSTEAMTOOL_VERSION;
-
-    std::optional<std::string> body = Mirror::Fetch(kPointerPath);
-    if (!body) {
-        LOG_WARN("AppUpdater: {} unavailable from all mirrors", kPointerPath);
-        return r;
-    }
+    r.newVersion = OPENSTEAMTOOL_VERSION;
+    r.updateAvailable = false;  // Forzar a false
+    LOG_INFO("AppUpdater: disabled - no updates will be checked");
+    return r;
+}
 
     toml::table tbl;
     try {
