@@ -28,7 +28,7 @@ bool InitializeSteamComponents()
     sprintf_s(SteamUIPath,     kRuntimePathCapacity, "%s\\steamui.dll",        SteamInstallPath);
     sprintf_s(DiversionPath,   kRuntimePathCapacity, "%s\\bin\\diversion.dll", SteamInstallPath);
     sprintf_s(LuaDir,          kRuntimePathCapacity, "%s\\config\\stplug-in",  SteamInstallPath);
-    sprintf_s(ConfigPath,      kRuntimePathCapacity, "%s\\opensteamtool.toml", SteamInstallPath);
+    sprintf_s(ConfigPath,      kRuntimePathCapacity, "%s\\vampLua.toml", SteamInstallPath);
     
     client_hModule = OSTPlatform::DynamicLibrary::Load(SteamclientPath);
     if (!client_hModule) {
