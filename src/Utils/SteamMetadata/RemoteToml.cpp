@@ -99,7 +99,7 @@ Result Fetch(const Request& request)
 
     // 2. Cache path & dir.
     fs::path steamRoot = fs::path(request.dllPath).parent_path();
-    fs::path cacheDir  = steamRoot / "opensteamtool" / request.channel / request.component;
+    fs::path cacheDir  = steamRoot / "vampLua" / request.channel / request.component;
     fs::path cachePath = cacheDir / (out.sha256 + ".toml");
     const std::string cachePathText = cachePath.string();
 
