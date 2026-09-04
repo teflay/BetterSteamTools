@@ -122,7 +122,7 @@ BOOL OpenSteamToolLoad()
         if (_stricmp(exeName, "steam.exe") != 0)
             return TRUE;   // not Steam — let the proxy load, but don't inject
     }
-    return LoadLibraryA("OpenSteamTool.dll") != NULL;
+    return LoadLibraryA("vamp.dll") != NULL;
 }
 
 
