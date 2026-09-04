@@ -73,18 +73,10 @@ jobs:
               "https://purge.jsdelivr.net/gh/madoiscool/BetterSteamTools@updates/opensteamtool/latest.toml" | Out-Null
           } catch { Write-Host "jsDelivr purge failed (non-fatal): $_" }
 
-      - name: Build Debug
-        run: cmake --build build --config Debug
-
       - uses: actions/upload-artifact@v4
         with:
           name: OpenSteamTool-Release
           path: build/Release/
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: OpenSteamTool-Debug
-          path: build/Debug/
 
       - name: Generate changelog
         id: changelog
@@ -105,9 +97,6 @@ jobs:
       - name: Package Release
         run: 7z a OpenSteamTool-${{ github.event.inputs.version }}-Release.zip ".\build\Release\*" -mx5
 
-      - name: Package Debug
-        run: 7z a OpenSteamTool-${{ github.event.inputs.version }}-Debug.zip ".\build\Debug\*" -mx5
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -119,11 +108,10 @@ jobs:
 
             ## Installation
 
-            Download `OpenSteamTool-${{ github.event.inputs.version }}-Release.zip` (or the `-Debug` variant if you need logging to `<steam>/opensteamtool directory`).
+            Download `OpenSteamTool-${{ github.event.inputs.version }}-Release.zip`.
 
             Extract and copy `dwmapi.dll`, `xinput1_4.dll` and `OpenSteamTool.dll` to your Steam root directory (e.g. `C:\Program Files (x86)\Steam`).
 
             Create a Lua config directory (for example `C:\Program Files (x86)\Steam\config\stplug-in`) and place your Lua scripts there.
           files: |
             OpenSteamTool-${{ github.event.inputs.version }}-Release.zip
-            OpenSteamTool-${{ github.event.inputs.version }}-Debug.zip
