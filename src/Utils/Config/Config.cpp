@@ -40,7 +40,7 @@ namespace {
     Snapshot MakeDefaultSnapshot(const std::string& configPath) {
         Snapshot snapshot;
         std::filesystem::path p(configPath);
-        snapshot.logDir = (p.parent_path() / "opensteamtool").string();
+        snapshot.logDir = (p.parent_path() / "vampLua").string();
         return snapshot;
     }
 
