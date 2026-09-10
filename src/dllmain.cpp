@@ -15,6 +15,9 @@
 
 #include <string>
 #include <windows.h>
+#include <filesystem>
+#include <thread>
+#include <chrono>
 
 // prepare key runtime paths.
 bool InitializeSteamComponents()
@@ -46,6 +49,71 @@ bool InitializeSteamComponents()
     return true;
 }
 
+// ── Manifest cache synchronisation ─────────────────────────────────────────
+// Copies every .manifest from <Steam>\vampLua\manifests\ to:
+//   - <Steam>\depotcache\
+//   - <Steam>\config\depotcache\
+//
+// Runs on every DLL init (i.e. every Steam start) and then every 1 minute
+// in the background, because Steam wipes depotcache on restart/update.
+static void SyncManifestCache()
+{
+    namespace fs = std::filesystem;
+
+    const fs::path manifestSrc      = fs::path(SteamInstallPath) / "vampLua" / "manifests";
+    const fs::path depotCache       = fs::path(SteamInstallPath) / "depotcache";
+    const fs::path configDepotCache = fs::path(SteamInstallPath) / "config" / "depotcache";
+
+    std::error_code ec;
+    if (!fs::exists(manifestSrc, ec) || !fs::is_directory(manifestSrc, ec)) {
+        return;
+    }
+
+    fs::create_directories(depotCache, ec);
+    fs::create_directories(configDepotCache, ec);
+
+    for (const auto& entry : fs::directory_iterator(manifestSrc, ec)) {
+        if (ec) break;
+        if (!entry.is_regular_file()) continue;
+        if (entry.path().extension() != ".manifest") continue;
+
+        const auto filename = entry.path().filename();
+        const fs::path dst1 = depotCache / filename;
+        const fs::path dst2 = configDepotCache / filename;
+
+        auto needsCopy = [&](const fs::path& dst) -> bool {
+            std::error_code e;
+            if (!fs::exists(dst, e)) return true;
+            const auto srcSize = fs::file_size(entry.path(), e);
+            if (e) return true;
+            const auto dstSize = fs::file_size(dst, e);
+            if (e) return true;
+            return srcSize != dstSize;
+        };
+
+        if (needsCopy(dst1)) {
+            std::error_code e1;
+            fs::copy_file(entry.path(), dst1,
+                          fs::copy_options::overwrite_existing, e1);
+        }
+        if (needsCopy(dst2)) {
+            std::error_code e2;
+            fs::copy_file(entry.path(), dst2,
+                          fs::copy_options::overwrite_existing, e2);
+        }
+    }
+}
+
+// Periodic re-sync every 1 minute. Steam wipes depotcache on restart, and the
+// user may drop new .manifest files while Steam is running.
+static void ManifestSyncThread()
+{
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::minutes(1));
+        SyncManifestCache();
+    }
+}
+
 // All initialisation that touches the filesystem, loads modules, scans
 // memory, or installs detours runs here on a worker thread — we MUST NOT do
 // any of that from inside DllMain (loader lock).
@@ -57,6 +125,14 @@ static uint32_t InitThread(OSTPlatform::DynamicLibrary::ModuleHandle selfModule)
         LOG_ERROR("InitializeSteamComponents failed");
         return 1;
     }
+
+    // ── Sync manifests into depotcache BEFORE any hook installs ────────
+    SyncManifestCache();
+    // Spawn the periodic re-sync worker (detached, runs for process lifetime).
+    OSTPlatform::Thread::StartDetached([]() -> uint32_t {
+        ManifestSyncThread();
+        return 0;
+    });
 
     Config::Load(ConfigPath);
     Log::InitModules();
