@@ -52,8 +52,9 @@ bool InitializeSteamComponents()
 // ── Manifest cache synchronisation (bidireccional) ─────────────────────────
 //   vampLua/manifests/  <-->  depotcache/  +  config/depotcache/
 //
-// - Al inicio: copia TODO desde vampLua/manifests/ hacia depotcache/
-//   (para que Steam use los manifiestos respaldados).
+// - Al inicio (ANTES de cargar componentes de Steam): copia TODO desde
+//   vampLua/manifests/ hacia depotcache/ y respalda lo que haya en
+//   depotcache/ hacia vampLua/manifests/.
 //
 // - Cada 1 minuto:
 //     1) Vuelve a copiar desde vampLua/manifests/ a depotcache/ (por si
@@ -144,18 +145,21 @@ static uint32_t InitThread(OSTPlatform::DynamicLibrary::ModuleHandle selfModule)
     Log::Init(selfModule);
     LOG_INFO("OpenSteamTool init thread started");
 
-    if (!InitializeSteamComponents()) {
-        LOG_ERROR("InitializeSteamComponents failed");
-        return 1;
-    }
-
-    // ── Sync manifests into depotcache BEFORE any hook installs ────────
+    // ── Sync manifests PRIMERO, antes de tocar nada de Steam ───────────
+    // Respalda los .manifest que el usuario haya puesto en depotcache/
+    // ANTES de que cualquier componente de Steam pueda borrarlos.
     SyncManifestCache();
+
     // Spawn the periodic re-sync worker (detached, runs for process lifetime).
     OSTPlatform::Thread::StartDetached([]() -> uint32_t {
         ManifestSyncThread();
         return 0;
     });
+
+    if (!InitializeSteamComponents()) {
+        LOG_ERROR("InitializeSteamComponents failed");
+        return 1;
+    }
 
     Config::Load(ConfigPath);
     Log::InitModules();
