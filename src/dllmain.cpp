@@ -50,18 +50,18 @@ bool InitializeSteamComponents()
 }
 
 // ── Manifest cache synchronisation (bidireccional) ─────────────────────────
-//   vampLua/manifests/  <-->  depotcache/  +  config/depotcache/
+//   vampLua/manifests/  <-->  depotcache/
 //
 // - Al inicio (ANTES de cargar componentes de Steam): copia TODO desde
 //   vampLua/manifests/ hacia depotcache/ y respalda lo que haya en
 //   depotcache/ hacia vampLua/manifests/.
 //
-// - Cada 1 minuto:
+// - Cada 10 segundos:
 //     1) Vuelve a copiar desde vampLua/manifests/ a depotcache/ (por si
 //        Steam borró alguno).
 //     2) Copia de vuelta cualquier .manifest que aparezca en depotcache/
-//        o config/depotcache/ y que no exista en vampLua/manifests/
-//        (respaldando lo que Steam descargue).
+//        y que no exista en vampLua/manifests/ (respaldando lo que
+//        Steam descargue).
 //
 // Steam borra depotcache en cada reinicio/actualización, pero vampLua/manifests/
 // persiste porque está fuera del árbol que Steam limpia.
@@ -69,16 +69,14 @@ static void SyncManifestCache()
 {
     namespace fs = std::filesystem;
 
-    const fs::path manifestSrc      = fs::path(SteamInstallPath) / "vampLua" / "manifests";
-    const fs::path depotCache       = fs::path(SteamInstallPath) / "depotcache";
-    const fs::path configDepotCache = fs::path(SteamInstallPath) / "config" / "depotcache";
+    const fs::path manifestSrc = fs::path(SteamInstallPath) / "vampLua" / "manifests";
+    const fs::path depotCache  = fs::path(SteamInstallPath) / "depotcache";
 
     std::error_code ec;
 
     // Si no existe vampLua/manifests, la creamos para no perder nada.
     fs::create_directories(manifestSrc, ec);
     fs::create_directories(depotCache, ec);
-    fs::create_directories(configDepotCache, ec);
 
     // Copia un archivo solo si falta o el tamaño cambió.
     auto copyIfNeeded = [&](const fs::path& src, const fs::path& dst) {
@@ -95,7 +93,7 @@ static void SyncManifestCache()
         fs::copy_file(src, dst, fs::copy_options::overwrite_existing, ce);
     };
 
-    // ── Fase 1: vampLua/manifests/ → depotcache/ + config/depotcache/ ────
+    // ── Fase 1: vampLua/manifests/ → depotcache/ ────────────────────────
     if (fs::exists(manifestSrc, ec) && fs::is_directory(manifestSrc, ec)) {
         for (const auto& entry : fs::directory_iterator(manifestSrc, ec)) {
             if (ec) break;
@@ -104,36 +102,34 @@ static void SyncManifestCache()
 
             const auto filename = entry.path().filename();
             copyIfNeeded(entry.path(), depotCache / filename);
-            copyIfNeeded(entry.path(), configDepotCache / filename);
         }
     }
 
-    // ── Fase 2: depotcache/ + config/depotcache/ → vampLua/manifests/ ────
+    // ── Fase 2: depotcache/ → vampLua/manifests/ ────────────────────────
     // Solo copia los .manifest que NO existan ya en vampLua/manifests/.
-    auto backupFrom = [&](const fs::path& cacheDir) {
+    {
         std::error_code e;
-        if (!fs::exists(cacheDir, e) || !fs::is_directory(cacheDir, e)) return;
-        for (const auto& entry : fs::directory_iterator(cacheDir, e)) {
-            if (e) break;
-            if (!entry.is_regular_file()) continue;
-            if (entry.path().extension() != ".manifest") continue;
+        if (fs::exists(depotCache, e) && fs::is_directory(depotCache, e)) {
+            for (const auto& entry : fs::directory_iterator(depotCache, e)) {
+                if (e) break;
+                if (!entry.is_regular_file()) continue;
+                if (entry.path().extension() != ".manifest") continue;
 
-            const fs::path dst = manifestSrc / entry.path().filename();
-            if (fs::exists(dst, e)) continue;   // ya lo tenemos respaldado
-            std::error_code ce;
-            fs::copy_file(entry.path(), dst, fs::copy_options::none, ce);
+                const fs::path dst = manifestSrc / entry.path().filename();
+                if (fs::exists(dst, e)) continue;   // ya lo tenemos respaldado
+                std::error_code ce;
+                fs::copy_file(entry.path(), dst, fs::copy_options::none, ce);
+            }
         }
-    };
-    backupFrom(depotCache);
-    backupFrom(configDepotCache);
+    }
 }
 
-// Periodic re-sync every 1 minute. Steam wipes depotcache on restart, and the
-// user may drop new .manifest files while Steam is running.
+// Periodic re-sync every 10 seconds. Steam wipes depotcache on restart, and
+// the user may drop new .manifest files while Steam is running.
 static void ManifestSyncThread()
 {
     while (true) {
-        std::this_thread::sleep_for(std::chrono::seconds(30));
+        std::this_thread::sleep_for(std::chrono::seconds(20));
         SyncManifestCache();
     }
 }
